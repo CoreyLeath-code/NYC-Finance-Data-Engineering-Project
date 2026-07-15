@@ -6,7 +6,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
-RUN groupadd --system --gid 10001 app \
+RUN python -m pip install --upgrade \
+      "pip>=26.1,<27" \
+      "setuptools>=80.9,<81" \
+      "wheel>=0.46.2,<0.47" \
+      "jaraco.context>=6.1,<7" \
+    && groupadd --system --gid 10001 app \
     && useradd --system --uid 10001 --gid app --home /app app
 
 FROM base AS api

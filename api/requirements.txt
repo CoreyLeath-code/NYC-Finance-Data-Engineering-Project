@@ -1,7 +1,6 @@
-fastapi
-uvicorn
-numpy
-scikit-learn
-joblib
-streamlit
-requests
+fastapi>=0.115,<1
+uvicorn>=0.32,<1
+numpy>=1.26,<3
+scikit-learn>=1.5,<1.7
+joblib>=1.4,<2
+prometheus-client>=0.21,<1

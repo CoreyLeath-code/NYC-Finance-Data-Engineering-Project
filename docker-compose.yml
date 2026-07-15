@@ -1,60 +1,68 @@
-version: '3.8'
-
-# Copy .env.example to .env and set real credentials before running.
-# Never commit a populated .env file.
-
 services:
   postgres:
-    image: postgres:13
+    image: postgres:16.6-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-finance_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your .env file}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_only_change_me}
       POSTGRES_DB: ${POSTGRES_DB:-nyc_finance}
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finance_user} -d ${POSTGRES_DB:-nyc_finance}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   api:
-    build: .
-    container_name: nyc_finance_api
-    env_file:
-      - .env
+    build:
+      context: .
+      target: api
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql://finance_user:finance_pass@postgres:5432/nyc_finance}
-      - MODEL_PATH=${MODEL_PATH:-models/model.pkl}
+      MODEL_PATH: /app/models/model.pkl
     ports:
       - "8000:8000"
-    depends_on:
-      - postgres
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
 
   dashboard:
-    image: python:3.10-slim
-    container_name: nyc_finance_dashboard
-    working_dir: /app
+    build:
+      context: .
+      target: dashboard
+    environment:
+      PROCESSED_DATA_PATH: /app/data/processed/nyc_finance_processed.csv
     volumes:
-      - .:/app
-    command: >
-      bash -c "pip install --quiet streamlit pandas && streamlit run dashboard/app.py --server.port 8501 --server.address 0.0.0.0"
+      - ./data/processed:/app/data/processed:ro
     ports:
       - "8501:8501"
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    restart: unless-stopped
 
   etl:
-    build: .
-    container_name: nyc_finance_etl
-    env_file:
-      - .env
+    build:
+      context: .
+      target: etl
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql://finance_user:finance_pass@postgres:5432/nyc_finance}
-      - RAW_DATA_DIR=${RAW_DATA_DIR:-/app/data/raw}
-      - PROCESSED_DATA_DIR=${PROCESSED_DATA_DIR:-/app/data/processed}
+      RAW_DATA_PATH: /app/data/raw/nyc_finance_synthetic.csv
+      PROCESSED_DATA_PATH: /app/data/processed/nyc_finance_processed.csv
     volumes:
-      - .:/app
+      - ./data:/app/data
     depends_on:
-      - postgres
-    command: bash run_etl.sh
+      postgres:
+        condition: service_healthy
+    profiles: ["pipeline"]
 
 volumes:
   pgdata:

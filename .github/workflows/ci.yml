@@ -37,7 +37,7 @@ jobs:
           pytest tests api/test_api.py             --cov=src.pipelines.etl --cov=api.main             --cov-report=term-missing --cov-report=xml --cov-fail-under=70
       - name: Reproducible benchmark smoke test
         run: |
-          python benchmarks/pipeline_benchmark.py --rows 10000 --repeats 3 --output benchmark.json
+          python -m benchmarks.pipeline_benchmark --rows 10000 --repeats 3 --output benchmark.json
           python -c "import json; d=json.load(open('benchmark.json')); assert d['metrics']['output_rows']==10000"
       - name: Audit API dependencies
         run: pip-audit --requirement api/requirements.txt

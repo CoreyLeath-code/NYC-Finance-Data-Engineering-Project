@@ -1,58 +1,91 @@
-"""
-src/pipelines/etl.py
+"""Validated, observable ETL primitives for NYC finance time-series data."""
 
-ETL pipeline for NYC Finance data.
-Provides load_raw(), transform(), and save_processed() used by the Airflow DAG,
-the benchmarks runner, and the top-level run_etl.py entry point.
-"""
+from __future__ import annotations
 
 import logging
 import os
+import time
+from dataclasses import asdict, dataclass
+from pathlib import Path
 
 import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-RAW_PATH = os.environ.get(
-    "RAW_DATA_PATH", os.path.join("data", "raw", "nyc_finance_synthetic.csv")
-)
-PROCESSED_PATH = os.environ.get(
-    "PROCESSED_DATA_PATH",
-    os.path.join("data", "processed", "nyc_finance_processed.csv"),
-)
+RAW_PATH = os.environ.get("RAW_DATA_PATH", "data/raw/nyc_finance_synthetic.csv")
+PROCESSED_PATH = os.environ.get("PROCESSED_DATA_PATH", "data/processed/nyc_finance_processed.csv")
+REQUIRED_COLUMNS = {"timestamp", "open", "close", "volume"}
+
+
+@dataclass(frozen=True)
+class PipelineMetrics:
+    input_rows: int
+    output_rows: int
+    duplicate_rows_removed: int
+    null_cells: int
+    elapsed_seconds: float
+
+    def to_dict(self) -> dict[str, int | float]:
+        return asdict(self)
 
 
 def load_raw(path: str = RAW_PATH) -> pd.DataFrame:
-    """Load raw NYC finance CSV data from *path*."""
-    if not os.path.exists(path):
-        raise FileNotFoundError(
-            f"Raw data file not found: {path}. "
-            "Run the data generator or provide the CSV before executing the pipeline."
-        )
-    logger.info("Loading raw data from %s", path)
-    df = pd.read_csv(path)
-    logger.info("Loaded %d rows", len(df))
-    return df
+    """Load a CSV and enforce the minimum research data contract."""
+    source = Path(path)
+    if not source.is_file():
+        raise FileNotFoundError(f"Raw data file not found: {source}")
+
+    frame = pd.read_csv(source)
+    missing = REQUIRED_COLUMNS - set(frame.columns)
+    if missing:
+        raise ValueError(f"Missing required columns: {sorted(missing)}")
+    if frame.empty:
+        raise ValueError("Input dataset is empty")
+    return frame
 
 
 def transform(df: pd.DataFrame) -> pd.DataFrame:
-    """Compute derived columns and normalise timestamps."""
-    df = df.copy()
+    """Normalize timestamps, reject invalid values, deduplicate, and derive returns."""
+    missing = REQUIRED_COLUMNS - set(df.columns)
+    if missing:
+        raise ValueError(f"Missing required columns: {sorted(missing)}")
 
-    if "close" in df.columns and "open" in df.columns:
-        df["return"] = (df["close"] - df["open"]) / df["open"]
+    output = df.copy()
+    output["timestamp"] = pd.to_datetime(output["timestamp"], errors="raise", utc=True)
+    for column in ("open", "close", "volume"):
+        output[column] = pd.to_numeric(output[column], errors="raise")
 
-    if "timestamp" in df.columns:
-        df["day_of_week"] = pd.to_datetime(df["timestamp"]).dt.day_name()
+    if (output["open"] <= 0).any():
+        raise ValueError("open must be greater than zero")
+    if (output["volume"] < 0).any():
+        raise ValueError("volume must be non-negative")
 
-    logger.info("Transform complete. Columns: %s", list(df.columns))
-    return df
+    output = output.drop_duplicates().sort_values("timestamp").reset_index(drop=True)
+    output["return"] = (output["close"] - output["open"]) / output["open"]
+    output["day_of_week"] = output["timestamp"].dt.day_name()
+    return output
+
+
+def run_pipeline(input_path: str = RAW_PATH, output_path: str = PROCESSED_PATH) -> PipelineMetrics:
+    """Execute ETL and return an auditable metrics record."""
+    started = time.perf_counter()
+    raw = load_raw(input_path)
+    transformed = transform(raw)
+    save_processed(transformed, output_path)
+    return PipelineMetrics(
+        input_rows=len(raw),
+        output_rows=len(transformed),
+        duplicate_rows_removed=len(raw) - len(transformed),
+        null_cells=int(transformed.isna().sum().sum()),
+        elapsed_seconds=round(time.perf_counter() - started, 6),
+    )
 
 
 def save_processed(df: pd.DataFrame, path: str = PROCESSED_PATH) -> None:
-    """Persist *df* to *path*, creating parent directories as needed."""
-    out_dir = os.path.dirname(path)
-    if out_dir:
-        os.makedirs(out_dir, exist_ok=True)
-    df.to_csv(path, index=False)
-    logger.info("Saved processed data to %s (%d rows)", path, len(df))
+    """Persist atomically enough for a single-process local pipeline."""
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(destination.suffix + ".tmp")
+    df.to_csv(temporary, index=False)
+    temporary.replace(destination)
+    logger.info("Saved %d rows to %s", len(df), destination)

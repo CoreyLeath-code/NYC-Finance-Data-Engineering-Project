@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nyc-finance-api
+spec:
+  selector:
+    app.kubernetes.io/name: nyc-finance-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  type: ClusterIP

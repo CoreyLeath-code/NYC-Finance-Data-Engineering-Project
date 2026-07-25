@@ -121,6 +121,40 @@ Required input columns:
 
 The ETL pipeline rejects missing columns, invalid values, and empty inputs; removes duplicate rows; sorts by timestamp; derives return and weekday fields; and replaces the processed CSV atomically.
 
+## Senior review follow-up: lineage, quality, and reproducibility
+
+This section closes the documentation items tracked in [issue #8](https://github.com/CoreyLeath-code/NYC-Finance-Data-Engineering-Project/issues/8). The benchmark is intentionally scoped to deterministic in-memory transformation work; it is not an end-to-end streaming, warehouse, or financial-performance claim.
+
+### Verification contract
+
+From a clean checkout:
+
+```bash
+python -m venv .venv
+# Linux/macOS: source .venv/bin/activate
+# Windows: .venv\Scripts\activate
+python -m pip install -r requirements.txt
+pytest tests api/test_api.py
+python benchmarks/pipeline_benchmark.py --output benchmarks/results/latest.json
+python -m json.tool benchmarks/results/latest.json
+docker compose config --quiet
+docker compose up --build -d api dashboard
+curl http://localhost:8000/healthz
+curl http://localhost:8000/readyz
+curl http://localhost:8000/metrics
+docker compose down
+```
+
+The JSON benchmark must include the commit SHA, dataset/provenance identifier, row volume, warm-up policy, storage mode, runner hardware, and whether caches were warm. CI coverage, dependency/secret/container scan results, image digest, and SBOM are release evidence and should be linked to the workflow run that produced them.
+
+### Engineering decisions and data failure modes
+
+- **Contract-first ETL:** schema and value checks make drift visible before serving, but upstream contract changes still require an explicit migration or quarantine policy.
+- **Idempotency vs. backfill speed:** atomic outputs make retries safe, while large historical backfills need bounded batches, checkpointing, and a reconciliation report.
+- **Local Compose vs. production topology:** Compose is a reproducible developer boundary; Kafka, Airflow, cloud IAM, warehouse performance, and multi-region recovery remain environment-specific extensions.
+- **Next production step:** attach a versioned sample dataset and lineage record to the benchmark, then exercise a schema-drift fixture and a failed-write recovery path before making throughput or quality claims.
+
+
 ## Quick start
 
 ```bash

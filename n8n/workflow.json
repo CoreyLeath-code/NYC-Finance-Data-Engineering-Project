@@ -1,16 +1,60 @@
 {
-  "name": "ML Pipeline Automation",
+  "name": "NYC Finance validation dispatch",
   "nodes": [
     {
-      "name": "Trigger",
-      "type": "n8n-nodes-base.cron"
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        0
+      ]
     },
     {
-      "name": "Run Training",
-      "type": "n8n-nodes-base.executeCommand",
       "parameters": {
-        "command": "python train.py"
+        "method": "POST",
+        "url": "=https://api.github.com/repos/{{$env.GITHUB_OWNER}}/NYC-Finance-Data-Engineering-Project/actions/workflows/ci.yml/dispatches",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"ref\":\"main\"}",
+        "options": {}
+      },
+      "id": "dispatch-ci",
+      "name": "Dispatch repository CI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "REPLACE_WITH_GITHUB_OAUTH_CREDENTIAL_ID",
+          "name": "GitHub organization OAuth"
+        }
       }
     }
-  ]
+  ],
+  "connections": {
+    "Manual trigger": {
+      "main": [
+        [
+          {
+            "node": "Dispatch repository CI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "2"
 }

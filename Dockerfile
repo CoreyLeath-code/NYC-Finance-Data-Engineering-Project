@@ -16,7 +16,13 @@ RUN python -m pip install --upgrade \
 
 FROM base AS api
 COPY api/requirements.txt /tmp/requirements.txt
-RUN python -m pip install --requirement /tmp/requirements.txt
+RUN python -m pip install --requirement /tmp/requirements.txt \
+    && rm -rf \
+        /usr/local/bin/pip \
+        /usr/local/bin/pip3 \
+        /usr/local/bin/pip3.11 \
+        /usr/local/lib/python3.11/site-packages/pip \
+        /usr/local/lib/python3.11/site-packages/pip-*.dist-info
 COPY --chown=app:app api ./api
 USER 10001:10001
 EXPOSE 8000

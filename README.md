@@ -1,18 +1,8 @@
 # NYC Finance Data Engineering Project
 
-[![L5 Engineering Quality](https://github.com/CoreyLeath-code/NYC-Finance-Data-Engineering-Project/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/CoreyLeath-code/NYC-Finance-Data-Engineering-Project/actions/workflows/ci.yml)
-[![Supply Chain](https://github.com/CoreyLeath-code/NYC-Finance-Data-Engineering-Project/actions/workflows/supply-chain.yml/badge.svg?branch=main)](https://github.com/CoreyLeath-code/NYC-Finance-Data-Engineering-Project/actions/workflows/supply-chain.yml)
-![Engineering Quality](https://img.shields.io/badge/Engineering%20Quality-L5-7c3aed)
-![Deployment Hygiene](https://img.shields.io/badge/Deployment%20Hygiene-9%2F9-16a34a)
-![Python](https://img.shields.io/badge/Python-3.11-3776ab?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-Validated-009688?logo=fastapi&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16.6-4169e1?logo=postgresql&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Non--root-2496ed?logo=docker&logoColor=white)
-![Kubernetes](https://img.shields.io/badge/Kubernetes-Validated-326ce5?logo=kubernetes&logoColor=white)
-![Prometheus](https://img.shields.io/badge/Prometheus-Instrumented-e6522c?logo=prometheus&logoColor=white)
-![SBOM](https://img.shields.io/badge/SBOM-SPDX-blue)
-![Signing](https://img.shields.io/badge/Releases-Cosign%20Signed-6f42c1)
-![License](https://img.shields.io/github/license/CoreyLeath-code/NYC-Finance-Data-Engineering-Project)
+[![CI](https://github.com/CoreyLeath-code/NYC-Finance-Data-Engineering-Project/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/CoreyLeath-code/NYC-Finance-Data-Engineering-Project/actions/workflows/ci.yml)
+[![Supply chain](https://github.com/CoreyLeath-code/NYC-Finance-Data-Engineering-Project/actions/workflows/supply-chain.yml/badge.svg?branch=main)](https://github.com/CoreyLeath-code/NYC-Finance-Data-Engineering-Project/actions/workflows/supply-chain.yml)
+[![License](https://img.shields.io/github/license/CoreyLeath-code/NYC-Finance-Data-Engineering-Project)](LICENSE)
 
 A research-oriented data engineering reference implementation for validating, transforming, benchmarking, serving, and monitoring NYC finance time-series data.
 

@@ -7,7 +7,6 @@ import json
 import os
 import platform
 import statistics
-import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,16 +17,9 @@ import pandas as pd
 from src.pipelines.etl import transform
 
 
-def _git_sha() -> str | None:
-    env_sha = os.getenv("GITHUB_SHA")
-    if env_sha:
-        return env_sha
-    try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL
-        ).strip()
-    except (OSError, subprocess.CalledProcessError):
-        return None
+def _commit_sha() -> str | None:
+    """Return CI-provided commit provenance without spawning a subprocess."""
+    return os.getenv("GITHUB_SHA") or os.getenv("SOURCE_COMMIT_SHA")
 
 
 def make_dataset(rows: int, seed: int) -> pd.DataFrame:
@@ -67,7 +59,7 @@ def benchmark(rows: int, repeats: int, seed: int) -> dict[str, object]:
         "created_at": datetime.now(timezone.utc).isoformat(),
         "benchmark": "in-memory ETL transform microbenchmark",
         "source": {
-            "commit_sha": _git_sha(),
+            "commit_sha": _commit_sha(),
             "github_run_id": os.getenv("GITHUB_RUN_ID"),
         },
         "dataset": {"synthetic": True, "rows": rows, "seed": seed},

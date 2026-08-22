@@ -6,6 +6,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
+
+# Apply available Debian security fixes during the image build. Release images
+# remain gated by Trivy, so fixable HIGH/CRITICAL findings are remediated rather
+# than ignored or waived.
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN python -m pip install --upgrade \
       "pip>=26.1,<27" \
       "setuptools>=80.9,<81" \

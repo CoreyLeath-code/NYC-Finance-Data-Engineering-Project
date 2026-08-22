@@ -10,26 +10,60 @@ on:
       - ".github/workflows/supply-chain.yml"
   push:
     branches: [main]
-    tags: ["v*.*.*"]
+    tags:
+      - "v*.*.*"
   schedule:
     - cron: "17 3 * * 1"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional existing semantic version tag to publish"
+        required: false
+        type: string
 
 permissions:
   contents: read
   packages: write
   id-token: write
 
+env:
+  IMAGE: ghcr.io/coreyleath-code/nyc-finance-data-engineering-project
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+
 jobs:
   image-security:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - name: Resolve checkout ref
+        id: ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.release_tag }}" ]]; then
+            if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Invalid release tag: $RELEASE_TAG" >&2
+              exit 1
+            fi
+            echo "value=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+            if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+              echo "publish=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
       - uses: actions/checkout@v4
-      - name: Set image reference
-        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+        with:
+          ref: ${{ steps.ref.outputs.value }}
+          fetch-depth: 0
+
       - name: Build API image
         run: docker build --target api -t "$IMAGE:${GITHUB_SHA}" .
+
       - name: Scan HIGH and CRITICAL vulnerabilities
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -38,31 +72,50 @@ jobs:
           exit-code: "1"
           ignore-unfixed: true
           severity: HIGH,CRITICAL
+
       - name: Generate SPDX SBOM
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.IMAGE }}:${{ github.sha }}
           format: spdx-json
           output: sbom.spdx.json
+
       - uses: actions/upload-artifact@v4
         with:
           name: api-sbom
           path: sbom.spdx.json
+
       - name: Login to GHCR
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.ref.outputs.publish == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Push immutable release image
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.ref.outputs.publish == 'true'
+        shell: bash
         run: |
-          docker tag "$IMAGE:${GITHUB_SHA}" "$IMAGE:${GITHUB_REF_NAME}"
-          docker push "$IMAGE:${GITHUB_REF_NAME}"
+          set -euo pipefail
+          tag="$RELEASE_TAG"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF_NAME}"
+          fi
+          docker tag "$IMAGE:${GITHUB_SHA}" "$IMAGE:$tag"
+          docker push "$IMAGE:$tag"
+
       - name: Install Cosign
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.ref.outputs.publish == 'true'
         uses: sigstore/cosign-installer@v3
+
       - name: Sign release image
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: cosign sign --yes "$IMAGE:${GITHUB_REF_NAME}"
+        if: steps.ref.outputs.publish == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$RELEASE_TAG"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF_NAME}"
+          fi
+          cosign sign --yes "$IMAGE:$tag"

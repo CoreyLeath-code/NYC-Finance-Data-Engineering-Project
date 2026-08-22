@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import statistics
 import time
@@ -14,6 +15,11 @@ import numpy as np
 import pandas as pd
 
 from src.pipelines.etl import transform
+
+
+def _commit_sha() -> str | None:
+    """Return CI-provided commit provenance without spawning a subprocess."""
+    return os.getenv("GITHUB_SHA") or os.getenv("SOURCE_COMMIT_SHA")
 
 
 def make_dataset(rows: int, seed: int) -> pd.DataFrame:
@@ -31,25 +37,43 @@ def make_dataset(rows: int, seed: int) -> pd.DataFrame:
 
 def benchmark(rows: int, repeats: int, seed: int) -> dict[str, object]:
     source = make_dataset(rows, seed)
+
+    # One untimed warm-up makes cache state explicit and keeps the timed samples
+    # focused on steady-state transform behavior.
+    warmup_result = transform(source)
+    if len(warmup_result) != rows:
+        raise RuntimeError("warm-up output row count did not match input")
+
     timings: list[float] = []
+    result = warmup_result
     for _ in range(repeats):
-        started = time.perf_counter()
+        started = time.perf_counter_ns()
         result = transform(source)
-        timings.append(time.perf_counter() - started)
+        timings.append((time.perf_counter_ns() - started) / 1_000_000_000)
 
     median = statistics.median(timings)
     ordered = sorted(timings)
     p95 = ordered[min(len(ordered) - 1, int(0.95 * len(ordered)))]
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "benchmark": "in-memory ETL transform microbenchmark",
+        "source": {
+            "commit_sha": _commit_sha(),
+            "github_run_id": os.getenv("GITHUB_RUN_ID"),
+        },
         "dataset": {"synthetic": True, "rows": rows, "seed": seed},
-        "protocol": {"repeats": repeats, "warm_cache": True},
+        "protocol": {
+            "warmup_iterations": 1,
+            "timed_iterations": repeats,
+            "clock": "time.perf_counter_ns",
+            "storage_mode": "in-memory",
+        },
         "metrics": {
             "median_seconds": round(median, 6),
             "p95_seconds": round(p95, 6),
             "median_rows_per_second": round(rows / median, 2),
+            "input_rows": rows,
             "output_rows": len(result),
             "null_cells": int(result.isna().sum().sum()),
         },
@@ -58,6 +82,9 @@ def benchmark(rows: int, repeats: int, seed: int) -> dict[str, object]:
             "pandas": pd.__version__,
             "numpy": np.__version__,
             "platform": platform.platform(),
+            "machine": platform.machine(),
+            "processor": platform.processor() or None,
+            "cpu_count": os.cpu_count(),
         },
         "samples_seconds": [round(value, 6) for value in timings],
     }

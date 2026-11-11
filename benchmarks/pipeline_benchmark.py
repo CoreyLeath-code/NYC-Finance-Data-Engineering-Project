@@ -8,7 +8,7 @@ import os
 import platform
 import statistics
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -56,7 +56,7 @@ def benchmark(rows: int, repeats: int, seed: int) -> dict[str, object]:
     p95 = ordered[min(len(ordered) - 1, int(0.95 * len(ordered)))]
     return {
         "schema_version": 2,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "benchmark": "in-memory ETL transform microbenchmark",
         "source": {
             "commit_sha": _commit_sha(),

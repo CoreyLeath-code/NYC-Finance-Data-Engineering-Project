@@ -1,6 +1,6 @@
 fastapi>=0.163.0,<1
 uvicorn>=0.32,<1
 numpy>=1.26,<3
-scikit-learn>=1.5,<1.7
+scikit-learn>=1.9.1,<1.10
 joblib>=1.4,<2
 prometheus-client>=0.21,<1

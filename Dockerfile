@@ -1,4 +1,4 @@
-FROM python:3.11-slim AS base
+FROM python:3.12-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -29,8 +29,8 @@ RUN python -m pip install --requirement /tmp/requirements.txt \
         /usr/local/bin/pip \
         /usr/local/bin/pip3 \
         /usr/local/bin/pip3.11 \
-        /usr/local/lib/python3.11/site-packages/pip \
-        /usr/local/lib/python3.11/site-packages/pip-*.dist-info
+        /usr/local/lib/python3.12/site-packages/pip \
+        /usr/local/lib/python3.12/site-packages/pip-*.dist-info
 COPY --chown=app:app api ./api
 USER 10001:10001
 EXPOSE 8000

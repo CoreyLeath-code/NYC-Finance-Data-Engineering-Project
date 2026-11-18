@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import math
 import os
 import time
 from pathlib import Path
@@ -12,6 +14,8 @@ from fastapi import FastAPI, HTTPException, Request
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.responses import Response
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="NYC Finance ML Inference API", version="0.2.0")
 _model: Any | None = None
@@ -33,7 +37,7 @@ def _get_model() -> Any:
 
 
 class PredictionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     features: Annotated[list[float], Field(min_length=1, max_length=512)]
 
 
@@ -46,7 +50,7 @@ async def observe(request: Request, call_next: Any) -> Response:
     started = time.perf_counter()
     response = await call_next(request)
     route = request.scope.get("route")
-    path = getattr(route, "path", request.url.path)
+    path = getattr(route, "path", "unmatched")
     REQUESTS.labels(request.method, path, response.status_code).inc()
     LATENCY.labels(request.method, path).observe(time.perf_counter() - started)
     return response
@@ -79,7 +83,11 @@ def predict(data: PredictionRequest) -> PredictionResponse:
         model = _get_model()
         prediction = model.predict(np.asarray(data.features, dtype=float).reshape(1, -1))[0]
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.warning("Model unavailable: %s", exc)
+        raise HTTPException(status_code=503, detail="Model unavailable") from exc
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail="Invalid feature vector") from exc
+    if not math.isfinite(float(prediction)):
+        logger.error("Inference produced a non-finite prediction")
+        raise HTTPException(status_code=503, detail="Model unavailable")
     return PredictionResponse(prediction=float(prediction))

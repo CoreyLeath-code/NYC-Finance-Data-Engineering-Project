@@ -27,6 +27,24 @@ def test_prediction_missing_model():
     with patch("api.main._get_model", side_effect=FileNotFoundError("no model")):
         response = client.post("/predict", json={"features": [1.0]})
     assert response.status_code == 503
+    assert response.json() == {"detail": "Model unavailable"}
+
+
+def test_prediction_nonfinite_inputs_and_outputs_are_rejected():
+    assert client.post("/predict", json={"features": ["NaN"]}).status_code == 422
+    model = MagicMock()
+    model.predict.return_value = [float("nan")]
+    with patch("api.main._get_model", return_value=model):
+        response = client.post("/predict", json={"features": [1.0]})
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Model unavailable"
+
+
+def test_unknown_urls_do_not_inflate_metrics_cardinality():
+    client.get("/untrusted-client-path/very-unique-token-2026")
+    metrics = client.get("/metrics").text
+    assert 'path="unmatched"' in metrics
+    assert "very-unique-token-2026" not in metrics
 
 
 def test_prediction_rejects_empty_or_extra_input():

@@ -79,7 +79,7 @@ jobs:
         shell: bash
         run: |
           if [[ -s trivy-api-findings.json ]]; then
-            jq -r '.Results[] | select((.Vulnerabilities // []) | length > 0) | .Target as $target | .Vulnerabilities[] | "\\($target): \\(.PkgName)@\\(.InstalledVersion) \\(.VulnerabilityID)"' trivy-api-findings.json
+            jq -r '.Results[] | select((.Vulnerabilities // []) | length > 0) | .Target as $target | .Vulnerabilities[] | [$target, (.PkgName + "@" + .InstalledVersion), .VulnerabilityID] | @tsv' trivy-api-findings.json
           fi
 
       - name: Generate SPDX SBOM
